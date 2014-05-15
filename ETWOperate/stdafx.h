@@ -5,6 +5,8 @@
 
 #pragma once
 
+#define WINVER 0x0601
+
 #include "targetver.h"
 
 #include <stdio.h>

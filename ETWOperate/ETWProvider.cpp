@@ -27,9 +27,55 @@ ULONG ETWProvider::UnRegisterProviderGuid()
 	return ERROR_INVALID_HANDLE;
 }
 
-ULONG ETWProvider::TraceEvent()
+ULONG ETWProvider::TraceCustomEvent(UCHAR EventType)
 {
-	return 0;
+	EVENT_DATA EventData;
+	EventData.Cost = 32;
+	EventData.ID = TempId;
+	EventData.Indices[0] = 4;
+	EventData.Indices[1] = 5;
+	EventData.Indices[2] = 6;
+	EventData.IsComplete = TRUE;
+	wcscpy_s(EventData.Signature, MAX_SIGNATURE_LEN, L"Signature");
+	EventData.Size = 1024;
+	if(ms_TraceOn && (4 == ms_EnableLevel || TRACE_LEVEL_ERROR <= ms_EnableFalgs ))
+	{
+		CUSTOM_EVENT CustomEvent;
+
+		// initial the event data structure;
+
+		ZeroMemory(&CustomEvent, sizeof(CUSTOM_EVENT));
+		CustomEvent.Header.Size = sizeof(EVENT_TRACE_HEADER) + sizeof(MOF_FIELD) * EVENT_DATA_FIELDS_CNT;
+		CustomEvent.Header.Flags = WNODE_FLAG_TRACED_GUID | WNODE_FLAG_USE_MOF_PTR;
+		CustomEvent.Header.Guid = CategoryGuid;
+		CustomEvent.Header.Class.Type = EventType;
+		CustomEvent.Header.Class.Version = 1;
+		CustomEvent.Header.Class.Level = ms_EnableLevel;
+
+		// Load the event data
+		CustomEvent.Data[0].DataPtr = (ULONG64) &(EventData.Cost);
+		CustomEvent.Data[0].Length = sizeof(EventData.Cost);
+		CustomEvent.Data[1].DataPtr = (ULONG64) &(EventData.Indices);
+		CustomEvent.Data[1].Length = sizeof(EventData.Indices);
+		CustomEvent.Data[2].DataPtr = (ULONG64) &(EventData.Signature);
+		CustomEvent.Data[2].Length = (ULONG) ((wcslen(EventData.Signature) + 1) *sizeof(WCHAR));
+		CustomEvent.Data[3].DataPtr = (ULONG64) &(EventData.IsComplete);
+		CustomEvent.Data[3].Length = sizeof(EventData.IsComplete);
+		CustomEvent.Data[4].DataPtr = (ULONG64) &(EventData.ID);
+		CustomEvent.Data[4].Length = sizeof(EventData.ID);
+		CustomEvent.Data[5].DataPtr = (ULONG64) &(EventData.Size);
+		CustomEvent.Data[5].Length = sizeof(EventData.Size);
+
+		ULONG status = ::TraceEvent(ms_TraceHandle, &(CustomEvent.Header));
+		if(ERROR_SUCCESS != status)
+		{
+			//wprintf(L"Trace Failed");
+			ms_TraceOn = FALSE;
+		}
+
+		return status;
+	}
+	return FALSE;
 }
 
 
