@@ -1,11 +1,19 @@
 
 #pragma once
 #define INITGUID
+#include <WTypes.h>
 #include <Guiddef.h>
 #include <Wmistr.h>
 #include <Evntrace.h>
 
 #define CUSTOM_SESSION_NAME L"Trace Session of Han"
+
+// Identifies the event type within the MyCategoryGuid category 
+// of events to be logged. This is the same value as the EventType 
+// qualifier that is defined in the event type MOF class for one of 
+// the CategoryGuid category of events.
+#define ETWPROVIDER_PROCESS_ENTERWMAIN	1
+#define ETWPROVIDER_PROCESS_SHOWVIEW	2
 
 //The following values define the possible class GUIDs for kernel events that an NT Kernel Logger session can trace. 
 //http://msdn.microsoft.com/en-us/library/windows/desktop/aa364085(v=vs.85).aspx

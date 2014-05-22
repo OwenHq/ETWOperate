@@ -4,9 +4,46 @@
 #include <ShlObj.h>
 #include <strsafe.h>
 #include <evntcons.h>
+//Test
+#include <Shlwapi.h>
+#pragma comment(lib, "Shlwapi.lib")
+//Test
+#include "ETWConsumer.h"
+
+
+#define		REGEDIT_THUNDER_SUB_KEY						L"SOFTWARE\\Thunder Network\\ThunderOem\\thunder_backwnd"
+#define		REGEDIT_THUNDER_KEY_VALUE_PATH				L"Path"
+#define		REGEDIT_THUNDER_KEY_VALUE_VERSION			L"Version"
+#define		REGEDIT_THUNDER_KEY_VALUE_INTASLLDIR		L"instdir"
+
+BOOL GetThunderInstallDir(std::wstring& wszInstallDir)
+{
+	const size_t cdwBufferSize = 512;
+	wchar_t szBuffer[cdwBufferSize] = {0};
+	DWORD dwBufferSize = cdwBufferSize;
+	DWORD dwType = (DWORD)-1;
+
+	if (ERROR_SUCCESS == SHGetValue(HKEY_LOCAL_MACHINE, REGEDIT_THUNDER_SUB_KEY, REGEDIT_THUNDER_KEY_VALUE_INTASLLDIR, &dwType, szBuffer, &dwBufferSize))
+	{
+		if (wcslen(szBuffer) > 0)
+		{
+			wszInstallDir = szBuffer;
+			if (wszInstallDir[wszInstallDir.length()-1] != L'\\')
+			{
+				wszInstallDir += L"\\program\\thunder.exe";
+			}
+			return TRUE;
+		}
+
+		return FALSE;
+	}
+
+	return FALSE;
+}
 
 
 BOOL ETWController::ms_bFinishTrace = FALSE;
+HANDLE ETWController::ms_hFinishTraceEvent = NULL;
 
 ETWController::ETWController()
 : m_pKernelEventTraceProperties(NULL)
@@ -14,6 +51,8 @@ ETWController::ETWController()
 , m_pCustomEventTraceProperties(NULL)
 , m_hCustomTraceHandle(NULL)
 {
+	ms_hFinishTraceEvent = ::CreateEvent(NULL, TRUE, FALSE, L"ETWController_FinishTraceEvent");
+
 	SYSTEMTIME sysTime;
 	::GetLocalTime( &sysTime );
 	wchar_t wszSubDirPath[MAX_PATH] = {0};
@@ -31,10 +70,36 @@ ETWController::~ETWController()
 
 ULONG ETWController::ETWC_StartTrace()
 {
+	wprintf(L"Enter ETWC_StartTrace \r\n");
 	ULONG status = ERROR_SUCCESS;
 	TRACEHANDLE hTraceHandle = 0;
 	EVENT_TRACE_PROPERTIES *pEventTraceProperties = NULL;
 	ULONG BufferSize = 0;
+
+	//	提升应用程序权限
+
+	HANDLE token;
+	//GetCurrentProcess()函数返回本进程的伪句柄
+	if(!::OpenProcessToken(::GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token))
+	{
+		return FALSE;
+	}
+	LUID luid;
+
+	if(!::LookupPrivilegeValue(NULL, SE_SYSTEM_PROFILE_NAME, &luid))
+	{
+		return FALSE;
+	}
+
+	TOKEN_PRIVILEGES pToken;
+	pToken.PrivilegeCount = 1;
+	pToken.Privileges[0].Luid = luid;
+	pToken.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+	if(!::AdjustTokenPrivileges(token, FALSE, &pToken, NULL, NULL, NULL))
+	{
+		return FALSE;
+	}
 
 	std::wstring wstrSystemLogFilePath = m_wstrLogDirPath + L"\\" + SYSTEM_LOGFILENAME;
 	std::wstring wstrCustomLogFilePath = m_wstrLogDirPath + L"\\" + CUSTOM_LOGFILENAME;
@@ -62,20 +127,20 @@ ULONG ETWController::ETWC_StartTrace()
 	pEventTraceProperties->Wnode.ClientContext = 1;	//QPC clock resolusion
 	pEventTraceProperties->Wnode.Guid = SystemTraceControlGuid;
 	pEventTraceProperties->LogFileMode = EVENT_TRACE_FILE_MODE_SEQUENTIAL;
-	pEventTraceProperties->MaximumFileSize = 128;
+	pEventTraceProperties->MaximumFileSize = 150;
 	pEventTraceProperties->FlushTimer = 1;
 	pEventTraceProperties->EnableFlags = EVENT_TRACE_FLAG_PROCESS | EVENT_TRACE_FLAG_THREAD | EVENT_TRACE_FLAG_IMAGE_LOAD | EVENT_TRACE_FLAG_DISK_IO | EVENT_TRACE_FLAG_DISK_FILE_IO
 		| EVENT_TRACE_FLAG_SYSTEMCALL | EVENT_TRACE_FLAG_MEMORY_PAGE_FAULTS | EVENT_TRACE_FLAG_MEMORY_HARD_FAULTS | EVENT_TRACE_FLAG_PROCESS_COUNTERS | EVENT_TRACE_FLAG_CSWITCH 
 		| EVENT_TRACE_FLAG_DPC| EVENT_TRACE_FLAG_PROFILE | EVENT_TRACE_FLAG_FILE_IO | EVENT_TRACE_FLAG_FILE_IO_INIT
 		| EVENT_TRACE_FLAG_FORWARD_WMI | EVENT_TRACE_FLAG_SPLIT_IO | EVENT_TRACE_FLAG_DISK_IO_INIT | EVENT_TRACE_FLAG_FILE_IO_INIT;
-	pEventTraceProperties->MinimumBuffers = 128;
+	pEventTraceProperties->MinimumBuffers = 150;
 	pEventTraceProperties->LoggerNameOffset = sizeof(EVENT_TRACE_PROPERTIES);
 	pEventTraceProperties->LogFileNameOffset = sizeof(EVENT_TRACE_PROPERTIES) + sizeof(KERNEL_LOGGER_NAME);
-	StringCbCopy((LPWSTR)((char*)pEventTraceProperties + pEventTraceProperties->LogFileNameOffset), (wstrSystemLogFilePath.length()+1) * sizeof(wchar_t), wstrSystemLogFilePath.c_str());
+	::StringCbCopy((LPWSTR)((char*)pEventTraceProperties + pEventTraceProperties->LogFileNameOffset), (wstrSystemLogFilePath.length()+1) * sizeof(wchar_t), wstrSystemLogFilePath.c_str());
 	m_pKernelEventTraceProperties = pEventTraceProperties;
 
 	// Create the trace session.
-	status = StartTrace(&hTraceHandle, KERNEL_LOGGER_NAME, pEventTraceProperties);
+	status = ::StartTrace(&hTraceHandle, KERNEL_LOGGER_NAME, pEventTraceProperties);
 	m_hKernelTraceHandle = hTraceHandle;
 	if(ERROR_SUCCESS != status)
 	{
@@ -90,7 +155,7 @@ ULONG ETWController::ETWC_StartTrace()
 	CLASSIC_EVENT_ID eventId[10] = {0};
 	eventId[0].EventGuid = PerfInfoGuid;
 	eventId[0].Type = 46;
-	status = TraceSetInformation(m_hKernelTraceHandle, TraceStackTracingInfo, eventId, sizeof(eventId));
+	status = ::TraceSetInformation(m_hKernelTraceHandle, TraceStackTracingInfo, eventId, sizeof(eventId));
 	if(ERROR_SUCCESS != status)
 	{
 		wprintf(L"TraceSetInformation failed with %lu \r\n", status);
@@ -106,19 +171,19 @@ ULONG ETWController::ETWC_StartTrace()
 	pEventTraceProperties->Wnode.ClientContext = 1;	//QPC clock resolusion
 	pEventTraceProperties->Wnode.Guid = SesionGuid;
 	pEventTraceProperties->LogFileMode = EVENT_TRACE_FILE_MODE_SEQUENTIAL | EVENT_TRACE_REAL_TIME_MODE;
-	pEventTraceProperties->MaximumFileSize = 128;
+	pEventTraceProperties->MaximumFileSize = 150;
 	pEventTraceProperties->FlushTimer = 1;
 	pEventTraceProperties->EnableFlags = 0;
-	pEventTraceProperties->MinimumBuffers = 128;
+	pEventTraceProperties->MinimumBuffers = 150;
 	pEventTraceProperties->LoggerNameOffset = sizeof(EVENT_TRACE_PROPERTIES);
 	pEventTraceProperties->LogFileNameOffset = sizeof(EVENT_TRACE_PROPERTIES) + sizeof(CUSTOM_SESSION_NAME);
 	StringCbCopy((LPWSTR)((char*)pEventTraceProperties + pEventTraceProperties->LogFileNameOffset), (1+wstrCustomLogFilePath.length()) * sizeof(wchar_t) , wstrCustomLogFilePath.c_str());
 	m_pCustomEventTraceProperties = pEventTraceProperties;
 
 	// Create the trace session.
-	status = StartTrace(&hTraceHandle, CUSTOM_SESSION_NAME, pEventTraceProperties);
+	status = ::StartTrace(&hTraceHandle, CUSTOM_SESSION_NAME, pEventTraceProperties);
 	m_hCustomTraceHandle = hTraceHandle;
-	status = EnableTrace(
+	status = ::EnableTrace(
 		TRUE,
 		0,
 		TRACE_LEVEL_INFORMATION,
@@ -133,6 +198,17 @@ ULONG ETWController::ETWC_StartTrace()
 	}
 
 	//Run your process
+	std::wstring programPath;
+	GetThunderInstallDir(programPath);
+	programPath = L"\"" + programPath + L"\"";
+	STARTUPINFO si = { sizeof(si) };
+	PROCESS_INFORMATION pi = {0};
+	BOOL isCreateSuccesss = ::CreateProcessW(NULL ,(LPWSTR)programPath.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+	if(!isCreateSuccesss)
+	{
+		ETWC_StopTrace();
+		return FALSE;
+	}
 
 	ETWC_ParseTrace();
 
@@ -141,12 +217,13 @@ ULONG ETWController::ETWC_StartTrace()
 
 ULONG ETWController::ETWC_StopTrace()
 {
+	wprintf(L"Enter ETWC_StopTrace \r\n");
 	if(m_hKernelTraceHandle)
 	{
 		ULONG status = ::ControlTrace(m_hKernelTraceHandle, NULL, m_pKernelEventTraceProperties, EVENT_TRACE_CONTROL_STOP);
 		if(ERROR_SUCCESS != status )
 		{
-			wprintf(L"Stop Failed with %lu \n", status);
+			wprintf(L"Stop Failed with %lu \r\n", status);
 		}
 	}
 
@@ -177,40 +254,51 @@ ULONG ETWController::ETWC_StopTrace()
 
 ULONG ETWController::ETWC_ParseTrace()
 {
+	wprintf(L"Enter ETWC_ParseTrace \r\n");
 	// Identify the log file from which you want to consume events
 	// and the callbacks used to process the events and buffers.
-	EVENT_TRACE_LOGFILE logFile;
-	ZeroMemory(&logFile, sizeof(EVENT_TRACE_LOGFILE));
-	logFile.LoggerName        = (LPWSTR)CUSTOM_SESSION_NAME;
-	logFile.BufferCallback    = (PEVENT_TRACE_BUFFER_CALLBACK)CustomBufferCallback;
-	logFile.EventCallback     = (PEVENT_CALLBACK)CustomEventCallback;
-	logFile.ProcessTraceMode  = PROCESS_TRACE_MODE_REAL_TIME;
+	EVENT_TRACE_LOGFILE eventTraceLogFile;
+	::ZeroMemory(&eventTraceLogFile, sizeof(EVENT_TRACE_LOGFILE));
+	eventTraceLogFile.LoggerName        = (LPWSTR)CUSTOM_SESSION_NAME;
+	eventTraceLogFile.BufferCallback    = (PEVENT_TRACE_BUFFER_CALLBACK)CustomBufferCallback;
+	eventTraceLogFile.EventCallback     = (PEVENT_CALLBACK)CustomEventCallback;
+	eventTraceLogFile.ProcessTraceMode  = PROCESS_TRACE_MODE_REAL_TIME;
 
-	while(!ms_bFinishTrace)
+	ULONG ulRet = ERROR_SUCCESS;
+	TRACEHANDLE hParseTraceHandle = ::OpenTrace(&eventTraceLogFile);
+	if ((ULONGLONG)-1 != hParseTraceHandle && (ULONGLONG)0x0FFFFFFFF != hParseTraceHandle) // 不能用INVALID_PROCESSTRACE_HANDLE比较
 	{
-		ULONG ulStatus = ERROR_SUCCESS;
-		TRACEHANDLE hTrace = OpenTrace(&logFile);
-
-		if ((ULONGLONG)-1 != hTrace && (ULONGLONG)0x0FFFFFFFF != hTrace) // 不能用INVALID_PROCESSTRACE_HANDLE比较
+		ulRet = ::ProcessTrace(&hParseTraceHandle, 1, 0, 0);
+		if (ulRet != ERROR_SUCCESS)
 		{
-			while ((ulStatus = ProcessTrace(&hTrace, 1, 0, 0)) == ERROR_SUCCESS)
-			{
-				if(ms_bFinishTrace)
-					break;
-			}
-
-			CloseTrace(hTrace);
+			wprintf(L"ETWC_ParseTrace: ProcessTrace failed, error code is %u \r\n", ulRet);
+			return ulRet;
 		}
-		Sleep(200);
 	}
+
+	DWORD dwRet = ::WaitForSingleObject(ms_hFinishTraceEvent, INFINITE);
+	wprintf(L"ETWC_ParseTrace: WaitForSingleObject-dwRet = %u \r\n", dwRet);
+	
+	ulRet = ::CloseTrace(hParseTraceHandle);
+	wprintf(L"ETWC_ParseTrace: CloseTrace-lRet = %u \r\n", ulRet);
 	ETWC_StopTrace();
 	ETWC_MergeTraceFile();
+
+	//测试
+	ETWConsumer etwConsumer;
+	std::wstring wstrMergeLogFilePath = m_wstrLogDirPath + L"\\" + MERGE_LOGFILENAME;
+	wchar_t* wszMergeLogFilePath = new wchar_t[wstrMergeLogFilePath.length() + 1];
+	wcscpy(wszMergeLogFilePath, wstrMergeLogFilePath.c_str());
+	etwConsumer.ParseTraceFile(wszMergeLogFilePath, 0);
+	delete [] wszMergeLogFilePath;
+	wszMergeLogFilePath = NULL;
 
 	return 0;
 }
 
 ULONG ETWController::ETWC_MergeTraceFile()
 {
+	wprintf(L"Enter ETWC_MergeTraceFile \r\n");
 	std::wstring wstrSystemLogFilePath = m_wstrLogDirPath + L"\\" + SYSTEM_LOGFILENAME;
 	std::wstring wstrCustomLogFilePath = m_wstrLogDirPath + L"\\" + CUSTOM_LOGFILENAME;
 	std::wstring wstrMergeLogFilePath = m_wstrLogDirPath + L"\\" + MERGE_LOGFILENAME;
@@ -219,9 +307,9 @@ ULONG ETWController::ETWC_MergeTraceFile()
 	char szCustomLogFilePath[MAX_PATH] = {0};
 	char szSystemLogFilePath[MAX_PATH] = {0};
 	char szMergeLogFilePath[MAX_PATH] = {0};
-	WideCharToMultiByte(CP_ACP,0, wstrSystemLogFilePath.c_str(), -1, szSystemLogFilePath, MAX_PATH, NULL, FALSE);
-	WideCharToMultiByte(CP_ACP,0, wstrCustomLogFilePath.c_str(), -1, szCustomLogFilePath, MAX_PATH, NULL, FALSE);
-	WideCharToMultiByte(CP_ACP,0, wstrMergeLogFilePath.c_str(), -1, szMergeLogFilePath, MAX_PATH, NULL, FALSE);
+	::WideCharToMultiByte(CP_ACP,0, wstrSystemLogFilePath.c_str(), -1, szSystemLogFilePath, MAX_PATH, NULL, FALSE);
+	::WideCharToMultiByte(CP_ACP,0, wstrCustomLogFilePath.c_str(), -1, szCustomLogFilePath, MAX_PATH, NULL, FALSE);
+	::WideCharToMultiByte(CP_ACP,0, wstrMergeLogFilePath.c_str(), -1, szMergeLogFilePath, MAX_PATH, NULL, FALSE);
 
 	strMergeCommand = "xperf -merge ";
 	strMergeCommand = strMergeCommand + szSystemLogFilePath + " " + szCustomLogFilePath + " " + szMergeLogFilePath;
@@ -230,14 +318,17 @@ ULONG ETWController::ETWC_MergeTraceFile()
 	return 0;
 }
 
-void WINAPI ETWController::CustomEventCallback(PEVENT_TRACE pEvent)
+void WINAPI ETWController::CustomEventCallback(PEVENT_TRACE pEventTrace)
 {
-	if(IsEqualGUID(pEvent->Header.Guid, CategoryGuid))
+	if(::IsEqualGUID(pEventTrace->Header.Guid, CategoryGuid))
 	{
-		/*if( THUNDER_PROVIDER_TYPE_END == pEvent->Header.Class.Type )
+		if( ETWPROVIDER_PROCESS_SHOWVIEW == pEventTrace->Header.Class.Type )
 		{
-			sm_IsFinishTrace = TRUE;
-		}*/
+			wprintf(L"CustomEventCallback is called, and pEventTrace->Header.Class.Type = 2 \r\n");
+			ms_bFinishTrace = TRUE;
+
+			::SetEvent(ms_hFinishTraceEvent);
+		}
 	}
 }
 

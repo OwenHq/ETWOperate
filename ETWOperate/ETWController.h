@@ -1,6 +1,5 @@
 
 #pragma once
-#include <WTypes.h>
 #include <string>
 #include "ETWCommonDefine.h"
 
@@ -43,10 +42,13 @@ private:
 private:
 	std::wstring	m_wstrLogDirPath;
 
+	//Session相关
 	EVENT_TRACE_PROPERTIES *m_pKernelEventTraceProperties;
 	TRACEHANDLE m_hKernelTraceHandle;
 	EVENT_TRACE_PROPERTIES *m_pCustomEventTraceProperties;
 	TRACEHANDLE m_hCustomTraceHandle;
 
+	//标识获取结束
 	static BOOL ms_bFinishTrace;
+	static HANDLE ms_hFinishTraceEvent;
 };

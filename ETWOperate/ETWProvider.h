@@ -5,19 +5,11 @@
 */
 
 #pragma once
-#include <WTypes.h>
 #include "ETWCommonDefine.h"
 
 #define MAX_INDICES	3
 #define MAX_SIGNATURE_LEN	32
 #define EVENT_DATA_FIELDS_CNT	16
-
-
-// Identifies the event type within the MyCategoryGuid category 
-// of events to be logged. This is the same value as the EventType 
-// qualifier that is defined in the event type MOF class for one of 
-// the MyCategoryGuid category of events.
-#define ETWPROVIDER_EVENT	1
 
 
 class ETWProvider
