@@ -86,18 +86,18 @@ DEFINE_GUID ( /* 3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c */
 // GUID that identifies the category of events that the provider can log. 
 // The GUID is also used in the event MOF class. 
 // Remember to change this GUID if you copy and paste this example.
-// {D1613217-E0A5-4c77-A4D2-DBAD23B80C71}
+// {56C6CB14-3AC4-47f5-9AD1-9EF7E728EB0F}
 static const GUID CategoryGuid = 
-{ 0xd1613217, 0xe0a5, 0x4c77, { 0xa4, 0xd2, 0xdb, 0xad, 0x23, 0xb8, 0xc, 0x71 } };
+{ 0x56c6cb14, 0x3ac4, 0x47f5, { 0x9a, 0xd1, 0x9e, 0xf7, 0xe7, 0x28, 0xeb, 0xf } };
 
 // GUID that identifies the provider that you are registering.
 // The GUID is also used in the provider MOF class. 
 // Remember to change this GUID if you copy and paste this example.
-// {36EF4ADA-9F6B-437a-AE0C-668CD7C291DC}
+// {C5F097E2-6D10-4820-81BE-04A15B6F8DBC}
 static const GUID ProviderGuid = 
-{ 0x36ef4ada, 0x9f6b, 0x437a, { 0xae, 0xc, 0x66, 0x8c, 0xd7, 0xc2, 0x91, 0xdc } };
+{ 0xc5f097e2, 0x6d10, 0x4820, { 0x81, 0xbe, 0x4, 0xa1, 0x5b, 0x6f, 0x8d, 0xbc } };
 
 // GUID used as the value for EVENT_DATA.ID.
-// {74259B1E-FA3C-4f00-91F7-F8DB0E78E020}
+// {4FBAE9A1-A8FD-4687-A0B3-F813E210E613}
 static const GUID TempId = 
-{ 0x74259b1e, 0xfa3c, 0x4f00, { 0x91, 0xf7, 0xf8, 0xdb, 0xe, 0x78, 0xe0, 0x20 } };
+{ 0x4fbae9a1, 0xa8fd, 0x4687, { 0xa0, 0xb3, 0xf8, 0x13, 0xe2, 0x10, 0xe6, 0x13 } };

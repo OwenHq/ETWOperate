@@ -22,7 +22,7 @@ public:
 
 public:
 	//开始跟踪
-	ULONG ETWC_StartTrace();
+	ULONG ETWC_StartTrace(const wchar_t* wszResultFilePath);
 	//停止跟踪
 	ULONG ETWC_StopTrace();
 
@@ -41,6 +41,10 @@ private:
 
 private:
 	std::wstring	m_wstrLogDirPath;
+	std::wstring	m_wstrResultFilePath;
+	std::wstring	m_wstrCustomEtlFileName;
+	std::wstring	m_wstrSystemEtlFileName;
+	std::wstring	m_wstrMergeEtlFileName;
 
 	//Session相关
 	EVENT_TRACE_PROPERTIES *m_pKernelEventTraceProperties;

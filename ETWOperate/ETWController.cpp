@@ -57,9 +57,20 @@ ETWController::ETWController()
 	::GetLocalTime( &sysTime );
 	wchar_t wszSubDirPath[MAX_PATH] = {0};
 	wsprintf(wszSubDirPath, L"%04d-%02d-%02d-%02d-%02d-%02d", sysTime.wYear, sysTime.wMonth, sysTime.wDay, sysTime.wHour, sysTime.wMinute, sysTime.wSecond);
+	//结果存放目录
 	m_wstrLogDirPath = LOG_DIRPATH;
 	m_wstrLogDirPath = m_wstrLogDirPath + wszSubDirPath;
 	::SHCreateDirectoryEx(NULL, m_wstrLogDirPath.c_str(), NULL);
+	//几个文件名
+	m_wstrCustomEtlFileName = L"";
+	m_wstrCustomEtlFileName += wszSubDirPath;
+	m_wstrCustomEtlFileName += CUSTOM_LOGFILENAME;
+	m_wstrSystemEtlFileName = L"";
+	m_wstrSystemEtlFileName += wszSubDirPath;
+	m_wstrSystemEtlFileName += SYSTEM_LOGFILENAME;
+	m_wstrMergeEtlFileName = L"";
+	m_wstrMergeEtlFileName += wszSubDirPath;
+	m_wstrMergeEtlFileName += MERGE_LOGFILENAME;
 }
 
 ETWController::~ETWController()
@@ -68,7 +79,7 @@ ETWController::~ETWController()
 }
 
 
-ULONG ETWController::ETWC_StartTrace()
+ULONG ETWController::ETWC_StartTrace(const wchar_t* wszResultFilePath)
 {
 	wprintf(L"Enter ETWC_StartTrace \r\n");
 	ULONG status = ERROR_SUCCESS;
@@ -101,8 +112,9 @@ ULONG ETWController::ETWC_StartTrace()
 		return FALSE;
 	}
 
-	std::wstring wstrSystemLogFilePath = m_wstrLogDirPath + L"\\" + SYSTEM_LOGFILENAME;
-	std::wstring wstrCustomLogFilePath = m_wstrLogDirPath + L"\\" + CUSTOM_LOGFILENAME;
+	m_wstrResultFilePath = wszResultFilePath;
+	std::wstring wstrSystemLogFilePath = m_wstrLogDirPath + L"\\" + m_wstrSystemEtlFileName;
+	std::wstring wstrCustomLogFilePath = m_wstrLogDirPath + L"\\" + m_wstrCustomEtlFileName;
 
 	//跟踪系统ETW日志
 
@@ -286,10 +298,10 @@ ULONG ETWController::ETWC_ParseTrace()
 
 	//测试
 	ETWConsumer etwConsumer;
-	std::wstring wstrMergeLogFilePath = m_wstrLogDirPath + L"\\" + MERGE_LOGFILENAME;
+	std::wstring wstrMergeLogFilePath = m_wstrLogDirPath + L"\\" + m_wstrMergeEtlFileName;
 	wchar_t* wszMergeLogFilePath = new wchar_t[wstrMergeLogFilePath.length() + 1];
 	wcscpy(wszMergeLogFilePath, wstrMergeLogFilePath.c_str());
-	etwConsumer.ParseTraceFile(wszMergeLogFilePath, 0);
+	etwConsumer.ParseTraceFile(wszMergeLogFilePath, ETWConsumer::OperationType_RunUpTime, m_wstrResultFilePath.c_str());
 	delete [] wszMergeLogFilePath;
 	wszMergeLogFilePath = NULL;
 
@@ -299,9 +311,9 @@ ULONG ETWController::ETWC_ParseTrace()
 ULONG ETWController::ETWC_MergeTraceFile()
 {
 	wprintf(L"Enter ETWC_MergeTraceFile \r\n");
-	std::wstring wstrSystemLogFilePath = m_wstrLogDirPath + L"\\" + SYSTEM_LOGFILENAME;
-	std::wstring wstrCustomLogFilePath = m_wstrLogDirPath + L"\\" + CUSTOM_LOGFILENAME;
-	std::wstring wstrMergeLogFilePath = m_wstrLogDirPath + L"\\" + MERGE_LOGFILENAME;
+	std::wstring wstrSystemLogFilePath = m_wstrLogDirPath + L"\\" + m_wstrSystemEtlFileName;
+	std::wstring wstrCustomLogFilePath = m_wstrLogDirPath + L"\\" + m_wstrCustomEtlFileName;
+	std::wstring wstrMergeLogFilePath = m_wstrLogDirPath + L"\\" + m_wstrMergeEtlFileName;
 
 	std::string strMergeCommand;
 	char szCustomLogFilePath[MAX_PATH] = {0};
